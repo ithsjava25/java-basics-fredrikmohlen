@@ -21,17 +21,17 @@ public class Main {
         int chargingTime = 0 ;
         String date = "";
         boolean sorted = false;
-        LocalTime currentTime = LocalTime.now();
+
 
         // if för SE# eller switch-sats vi får se, för 'datum', för 'tidsintervall'
         // för 'sortering' priser fallande, störst överst och för 'help'
 
 
-        if (args.length == 0) {
+        if (args.length == 0 || !args[0].equals("--zone")) {
             printHelp();
             return;
         } else {
-                    // byta till switch-sats??
+
             for (int i = 0; i < args.length; i++) {
                 if (args[i].equals("--zone")) {
                     prisklass = checkPrisklass(args[i + 1]);
@@ -63,6 +63,7 @@ public class Main {
         // Kollar om det inte finns något datum i argumenten och sätter "date" till dagens datum
         if (date.isEmpty()) {
             date = LocalDate.now().toString();
+            System.out.println("missing date, using today's date" + date);
         }
 
         // Skapar en lista som heter 'priser' som hämtar data från Elpris ifrån klassen ElpriserAPI
@@ -89,27 +90,32 @@ public class Main {
         }   else
             System.out.printf("Medelpris: %.2f kr/kwh%n", medelpris);
 
+        if(priser == null || priser.isEmpty()) {
+            System.out.println("Ingen data hittades för zon " + prisklass + "på datum" + date);
+            return;
+        } else {
 
-        // todo: Identify cheapest and most expensive hour -> print
-        //  - if two h same price, select earliest hour.
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH");
-        ElpriserAPI.Elpris cheapestPrice = priser.getFirst();
-        ElpriserAPI.Elpris mostExpensivePrice = priser.getFirst();
-        for (int i = 1; i < priser.size(); i++) {
-            ElpriserAPI.Elpris tempPrice = priser.get(i);
-            if (tempPrice.sekPerKWh() < cheapestPrice.sekPerKWh())
-                cheapestPrice = tempPrice;
-            if (tempPrice.sekPerKWh() > mostExpensivePrice.sekPerKWh())
-                mostExpensivePrice = tempPrice;
-        };
-        // tillfällig utskrift med '*100' för att få godkänt i testet
-        System.out.printf("Lägsta pris: %.2f öre (%s)%n" ,
-                cheapestPrice.sekPerKWh()*100,
-                cheapestPrice.timeStart().format(formatter) + "-" + cheapestPrice.timeEnd().format(formatter));
-        System.out.printf("Högsta pris: %.2f öre (%s)%n",
-                mostExpensivePrice.sekPerKWh()*100,
-                mostExpensivePrice.timeStart().format(formatter)+ "-" + mostExpensivePrice.timeEnd().format(formatter));
-
+            // todo: Identify cheapest and most expensive hour -> print
+            //  - if two h same price, select earliest hour.
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH");
+            ElpriserAPI.Elpris cheapestPrice = priser.getFirst();
+            ElpriserAPI.Elpris mostExpensivePrice = priser.getFirst();
+            for (int i = 1; i < priser.size(); i++) {
+                ElpriserAPI.Elpris tempPrice = priser.get(i);
+                if (tempPrice.sekPerKWh() < cheapestPrice.sekPerKWh())
+                    cheapestPrice = tempPrice;
+                if (tempPrice.sekPerKWh() > mostExpensivePrice.sekPerKWh())
+                    mostExpensivePrice = tempPrice;
+            }
+            ;
+            // tillfällig utskrift med '*100' för att få godkänt i testet
+            System.out.printf("Lägsta pris: %.2f öre (%s)%n",
+                    cheapestPrice.sekPerKWh() * 100,
+                    cheapestPrice.timeStart().format(formatter) + "-" + cheapestPrice.timeEnd().format(formatter));
+            System.out.printf("Högsta pris: %.2f öre (%s)%n",
+                    mostExpensivePrice.sekPerKWh() * 100,
+                    mostExpensivePrice.timeStart().format(formatter) + "-" + mostExpensivePrice.timeEnd().format(formatter));
+        }
         // skriv ut sorterade priser, fallande + dagen efter om kl efter 13.00
         // Skapa en kopia av listan
         // todo: kolla om det finns en lista för
