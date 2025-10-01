@@ -2,6 +2,7 @@ package com.example;
 
 import com.example.api.ElpriserAPI;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -13,12 +14,12 @@ public class Main {
     public static void main(String[] args) {
 
         ElpriserAPI elpriserAPI = new ElpriserAPI();
-        Locale.setDefault(Locale.of("sv","se"));
-         // Test- array för att se att inläsning fungerar.
-          //args = new String[]{"--zone", "SE2", "--charging", "4h", "--date", "2025-09-24", "--help", "--sorted"};
+        Locale.setDefault(Locale.of("sv", "se"));
+        // Test- array för att se att inläsning fungerar.
+        //args = new String[]{"--zone", "SE2", "--charging", "4h", "--date", "2025-09-24", "--help", "--sorted"};
 
         String prisklass = "";
-        int chargingTime = 0 ;
+        int chargingTime = 0;
         String date = "";
         boolean sorted = false;
 
@@ -35,14 +36,14 @@ public class Main {
             for (int i = 0; i < args.length; i++) {
                 if (args[i].equals("--zone")) {
                     prisklass = checkPrisklass(args[i + 1]);
-                    if(prisklass.isEmpty()) {
+                    if (prisklass.isEmpty()) {
                         System.out.println("Invalid zone");
-                                return;
+                        return;
                     }
                 } else if (args[i].equals("--date")) { // en koll för att kolla rätt datumformatering
                     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
                     try {
-                        LocalDate datum = LocalDate.parse(args[i+1]);
+                        LocalDate datum = LocalDate.parse(args[i + 1]);
                     } catch (DateTimeParseException e) {
                         System.out.println("Invalid date, use format YYYY-MM-DD");
                         return;
@@ -51,6 +52,11 @@ public class Main {
 
                 } else if (args[i].equals("--charging")) {
                     chargingTime = Integer.parseInt(args[i + 1].replaceAll("\\D", "")); // får endast ut siffran ur #h
+
+                    if (chargingTime != 2 && chargingTime != 4 && chargingTime != 8) {
+                        System.out.println("Invalid charging time");
+                        return;
+                    }
 
                 } else if (args[i].equalsIgnoreCase("--help")) {
                     printHelp();
@@ -63,7 +69,7 @@ public class Main {
         // Kollar om det inte finns något datum i argumenten och sätter "date" till dagens datum
         if (date.isEmpty()) {
             date = LocalDate.now().toString();
-            System.out.println("missing date, using today's date" + date);
+            System.out.println("Using today's date " + date);
         }
 
         // Skapar en lista som heter 'priser' som hämtar data från Elpris ifrån klassen ElpriserAPI
@@ -71,15 +77,15 @@ public class Main {
 //          ElpriserAPI.Elpris elpriser;
         int counter = 0;
         for (int i = 0; i < priser.size(); i++) {
-           // System.out.println(priser.get(i));
+            // System.out.println(priser.get(i));
             counter++;
-      }
+        }
         System.out.println("totala elprisers: " + counter);
 //        for (ElpriserAPI.Elpris elpriser : priser) {
 //            System.out.println(elpriser);
 //        }
         // todo: calculate and display the mean price for the current 24h in the "elpris"
-            double summa = 0.0;
+        double summa = 0.0;
         for (int i = 0; i < priser.size(); i++) {
             summa += priser.get(i).sekPerKWh();
         }// kollar om listan är tom då blir medelvärdet 0.0
@@ -87,11 +93,11 @@ public class Main {
         if (medelpris < 1) {
             medelpris = medelpris * 100;
             System.out.printf("Medelpris: %.2f öre/kWh%n", medelpris);
-        }   else
+        } else
             System.out.printf("Medelpris: %.2f kr/kwh%n", medelpris);
 
-        if(priser == null || priser.isEmpty()) {
-            System.out.println("Ingen data hittades för zon " + prisklass + "på datum" + date);
+        if (priser == null || priser.isEmpty()) {
+            System.out.println("Ingen data hittades för zon " + prisklass + " på datum " + date);
             return;
         } else {
 
@@ -125,10 +131,11 @@ public class Main {
         String dateNextDay = LocalDate.parse(date).plusDays(1).toString();
         if (sorted) {
             List<ElpriserAPI.Elpris> kopiaAvPriser = new ArrayList<>(priser);
-            List<ElpriserAPI.Elpris> elpricesOfTomorrow = elpriserAPI.getPriser(dateNextDay, ElpriserAPI.Prisklass.valueOf(prisklass));
-        // Sortera kopian i fallande ordning + sortera morgondagens
-            kopiaAvPriser.addAll(elpricesOfTomorrow);
+            List<ElpriserAPI.Elpris> pricesOfTomorrow = elpriserAPI.getPriser(dateNextDay, ElpriserAPI.Prisklass.valueOf(prisklass));
+            // Sortera kopian i fallande ordning + sortera morgondagens
+            kopiaAvPriser.addAll(pricesOfTomorrow);
             kopiaAvPriser.sort((a, b) -> Double.compare(b.sekPerKWh(), a.sekPerKWh()));
+
 
             for (ElpriserAPI.Elpris pris : kopiaAvPriser) {
                 System.out.printf("%s-%s %.2f öre \n",
@@ -138,6 +145,54 @@ public class Main {
             }
 
         }
+        // Hitta bästa laddningspris för 2h, 4h, och 8h (chargingTime)
+        double minSumChargingPrice = 0.0;
+        String billigasteStarttid = "";
+        double averageChargingPrice = 0.0;
+
+        List<ElpriserAPI.Elpris> kopiaAvPriser = new ArrayList<>(priser);
+        List<ElpriserAPI.Elpris> priserImorgon = elpriserAPI.getPriser(dateNextDay, ElpriserAPI.Prisklass.valueOf(prisklass));
+
+        kopiaAvPriser.addAll(priserImorgon);
+
+        for (int i = 0; i < chargingTime; i++){
+            minSumChargingPrice = minSumChargingPrice + kopiaAvPriser.get(i).sekPerKWh();
+        }
+            double windowSumChargingPrice = minSumChargingPrice;
+            billigasteStarttid = kopiaAvPriser.get(0).timeStart().format(DateTimeFormatter.ofPattern("HH:mm"));
+        if (priserImorgon.isEmpty()){
+            for (int i = chargingTime; i < priser.size(); i++){
+                windowSumChargingPrice = windowSumChargingPrice + (kopiaAvPriser.get(i).sekPerKWh() - kopiaAvPriser.get(i-chargingTime).sekPerKWh());
+
+                if (windowSumChargingPrice < minSumChargingPrice){
+                    minSumChargingPrice = windowSumChargingPrice;
+                    billigasteStarttid = kopiaAvPriser.get(i+1-chargingTime).timeStart().format(DateTimeFormatter.ofPattern("HH:mm"));
+                }
+            }
+        } else if (priserImorgon.size() < chargingTime-1) {
+            for (int i = chargingTime; i < priser.size() + priserImorgon.size(); i++) {
+                windowSumChargingPrice = windowSumChargingPrice + (kopiaAvPriser.get(i).sekPerKWh() - kopiaAvPriser.get(i - chargingTime).sekPerKWh());
+
+                if (windowSumChargingPrice < minSumChargingPrice) {
+                    minSumChargingPrice = windowSumChargingPrice;
+                    billigasteStarttid = kopiaAvPriser.get(i - chargingTime + 1).timeStart().format(DateTimeFormatter.ofPattern("HH:mm"));
+                }
+            }
+        }
+            else{
+            for (int i = chargingTime; i < priser.size()+chargingTime-1; i++){
+                windowSumChargingPrice = windowSumChargingPrice + (kopiaAvPriser.get(i).sekPerKWh() - kopiaAvPriser.get(i-chargingTime).sekPerKWh());
+
+                if (windowSumChargingPrice < minSumChargingPrice){
+                    minSumChargingPrice = windowSumChargingPrice;
+                    billigasteStarttid = kopiaAvPriser.get(i-chargingTime+1).timeStart().format(DateTimeFormatter.ofPattern("HH:mm"));
+                }
+            }
+        }
+        averageChargingPrice = (minSumChargingPrice/chargingTime) * 100;
+
+        System.out.println("Påbörja laddning kl " + billigasteStarttid);
+        System.out.println("Medelpris för fönster: " +  String.format("%.2f",averageChargingPrice) + " öre");
     }
 
     public static String checkPrisklass(String prisklass) {
@@ -164,6 +219,11 @@ public class Main {
                 --sorted (optional, to display prices in descending order)
                 --charging 2h|4h|8h (optional, to find optimal charging windows)
                 --help (optional, to display usage information)""");
+
+    }
+
+    public static void findOptimalChargingHours(){
+
 
     }
 }
